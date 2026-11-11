@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scholar Search</title>
+<style>
+  :root { --ink:#1d1d1f; --muted:#6b6b70; --line:#e4e4e7; --accent:#57068c; --bg:#fafafa; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, -apple-system, sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width: 780px; margin: 0 auto; padding: 48px 20px; }
+  h1 { margin:0 0 4px; font-size: 28px; }
+  .sub { color:var(--muted); margin:0 0 28px; }
+  form { display:flex; flex-direction:column; gap:12px; }
+  textarea { width:100%; min-height:80px; padding:12px; font:inherit; border:1px solid var(--line); border-radius:10px; resize:vertical; }
+  .row { display:flex; gap:12px; flex-wrap:wrap; align-items:end; }
+  label { font-size:13px; color:var(--muted); display:flex; flex-direction:column; gap:4px; }
+  input { padding:8px 10px; font:inherit; border:1px solid var(--line); border-radius:8px; width:130px; }
+  button { padding:10px 20px; font:inherit; font-weight:600; color:#fff; background:var(--accent); border:0; border-radius:8px; cursor:pointer; margin-left:auto; }
+  button:disabled { opacity:.5; cursor:wait; }
+  #answer { margin-top:32px; line-height:1.6; white-space:pre-wrap; }
+  #answer a { color:var(--accent); text-decoration:none; font-weight:600; }
+  .error { color:#b42318; }
+  h2 { font-size:16px; margin:32px 0 12px; }
+  .src { background:#fff; border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin-bottom:10px; }
+  .src.cited { border-left:4px solid var(--accent); }
+  .src .t { font-weight:600; }
+  .src .t a { color:inherit; }
+  .meta { color:var(--muted); font-size:13px; margin-top:4px; }
+  details { font-size:14px; margin-top:6px; color:#3f3f46; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Scholar Search</h1>
+  <p class="sub">Answers built only from peer-reviewed journal articles (via OpenAlex). No news, no blogs.</p>
+
+  <form id="f">
+    <textarea id="q" placeholder="e.g. Does raising the minimum wage reduce employment?" required></textarea>
+    <div class="row">
+      <label>Published from (year)<input id="year" type="number" min="1900" max="2100" placeholder="any"></label>
+      <label>Min citations<input id="cites" type="number" min="0" value="0"></label>
+      <button id="go">Search</button>
+    </div>
+  </form>
+
+  <div id="answer"></div>
+  <div id="sources"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+$("f").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("go").disabled = true; $("go").textContent = "Searching...";
+  $("answer").innerHTML = ""; $("sources").innerHTML = "";
+  try {
+    const res = await fetch("/api/ask", {
+      method: "POST", headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        question: $("q").value,
+        from_year: $("year").value ? Number($("year").value) : null,
+        min_citations: Number($("cites").value || 0),
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Request failed");
+
+    // Turn [n] into links that jump to the source card
+    $("answer").innerHTML = esc(data.answer).replace(/\[(\d+)\]/g, '<a href="#s$1">[$1]</a>');
+
+    if (data.sources.length) {
+      $("sources").innerHTML = "<h2>Sources</h2>" + data.sources.map((p, i) => `
+        <div class="src ${data.cited.includes(i + 1) ? "cited" : ""}" id="s${i + 1}">
+          <div class="t">[${i + 1}] <a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.title)}</a></div>
+          <div class="meta">${esc(p.authors)} · ${esc(p.venue)} · ${esc(p.year)} · ${esc(p.citations)} citations
+            ${p.open_access_url ? ` · <a href="${esc(p.open_access_url)}" target="_blank" rel="noopener">free PDF</a>` : ""}</div>
+          <details><summary>Abstract</summary>${esc(p.abstract)}</details>
+        </div>`).join("");
+    }
+  } catch (err) {
+    $("answer").innerHTML = `<p class="error">${esc(err.message)}</p>`;
+  } finally {
+    $("go").disabled = false; $("go").textContent = "Search";
+  }
+});
+</script>
+</body>
+</html>

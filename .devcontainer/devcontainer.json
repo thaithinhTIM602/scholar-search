@@ -1,0 +1,10 @@
+{
+  "name": "Scholar Search",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "pip install -r requirements.txt",
+  "forwardPorts": [8000],
+  "portsAttributes": { "8000": { "label": "Scholar Search", "onAutoForward": "openBrowser" } },
+  "secrets": {
+    "ANTHROPIC_API_KEY": { "description": "Your Anthropic API key from console.anthropic.com" }
+  }
+}
